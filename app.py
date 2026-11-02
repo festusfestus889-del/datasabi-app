@@ -1,9 +1,14 @@
 import requests
 import streamlit.components.v1 as components
 
-PAYSTACK_SECRET = st.secrets["PAYSTACK_SECRET_KEY"]
-PAYSTACK_PUBLIC = st.secrets["PAYSTACK_PUBLIC_KEY"]
 
+# Paystack Keys - safe version that won't crash
+try:
+    PAYSTACK_SECRET = st.secrets["PAYSTACK_SECRET_KEY"]
+    PAYSTACK_PUBLIC = st.secrets["PAYSTACK_PUBLIC_KEY"]
+except:
+    PAYSTACK_SECRET = "sk_test_733f7ed426305d8ade9d396ca721d21d0b040fc7"
+    PAYSTACK_PUBLIC = "pk_test_779701e221cab35814d81817c5a86bbd3b23e153"
 def verify_paystack_payment(reference):
     """Verifies if Paystack payment is successful"""
     url = f"https://api.paystack.co/transaction/verify/{reference}"
