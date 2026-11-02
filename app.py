@@ -1,56 +1,53 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
+import requests
+import streamlit.components.v1 as components
 
-st.set_page_config(page_title="DataSabi", page_icon="📊", layout="centered")
-PAYSTACK_LINK = "https://paystack.shop/pay/2jji7vgoln"
+PAYSTACK_SECRET = st.secrets["PAYSTACK_SECRET_KEY"]
+PAYSTACK_PUBLIC = st.secrets["PAYSTACK_PUBLIC_KEY"]
 
-# AUTO-UNLOCK LOGIC - NO CHECKBOX
-if st.query_params.get("paid") == "true":
-    st.session_state.paid = True
-
-if "paid" not in st.session_state:
-    st.session_state.paid = False
-
-st.title("📊 DataSabi")
-st.caption("Upload Your Data, Get Insights 🇳🇬")
-
-uploaded_file = st.file_uploader("Upload CSV/Excel", type=["csv", "xlsx"])
-df = None
-if uploaded_file:
+def verify_paystack_payment(reference):
+    """Verifies if Paystack payment is successful"""
+    url = f"https://api.paystack.co/transaction/verify/{reference}"
+    headers = {"Authorization": f"Bearer {PAYSTACK_SECRET}"}
     try:
-        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-    except:
-        df = pd.read_excel(uploaded_file)
+        r = requests.get(url, headers=headers, timeout=10)
+        data = r.json()
+        if data["status"] and data["data"]["status"] == "success":
+            return True, data["data"]
+        return False, data
+    except Exception as e:
+        return False, str(e)
 
-if df is not None:
-    st.success(f"Loaded {len(df)} rows")
-    st.write(df.head(5).astype(str))
-
-    if not st.session_state.paid:
-        st.divider()
-        st.subheader("🔒 Unlock Full Pro Report - ₦2,000")
-        st.link_button("💳 PAY ₦2,000 - AUTO UNLOCK", PAYSTACK_LINK, type="primary", use_container_width=True)
-        st.caption("After payment, you'll be sent back here and full report opens automatically. No checkbox needed.")
-        st.stop()
+def paystack_button(email, amount_kobo=200000): # 200000 kobo = N2,000
+    """Generates Paystack Inline button that auto-verifies"""
+    # Generate unique ref
+    ref = f"DATASABI_{int(datetime.now().timestamp())}"
     
-    # --- FULL REPORT - AUTO OPENED ---
-    st.balloons()
-    st.success("✅ Payment verified! Full Pro Report unlocked")
-    st.write(df.describe().astype(str))
-    try:
-        numeric_df = df.select_dtypes(include=['number'])
-        if not numeric_df.empty:
-            fig = px.line(numeric_df, y=numeric_df.columns[0], title="Trend")
-            st.plotly_chart(fig, use_container_width=True)
-    except:
-        pass
-    st.info("💡 Recommendation: Focus on your top products and run promos on slow days.")
-else:
-    st.info("👆 Upload a file to start")
-
-if st.session_state.get("paid"):
-    if st.button("Lock & Start Over"):
-        st.session_state.paid = False
-        st.query_params.clear()
-        st.rerun()
+    btn_code = f"""
+    <script src="https://js.paystack.co/v1/inline.js"></script>
+    <button id="pay-btn" style="
+        background:#0AA06E; color:white; padding:14px 28px; 
+        border:none; border-radius:8px; font-size:16px; 
+        font-weight:bold; width:100%; cursor:pointer;">
+        💳 Pay ₦2,000 with Paystack - Unlock Report
+    </button>
+    <script>
+    document.getElementById('pay-btn').onclick = function(){{
+        var handler = PaystackPop.setup({{
+            key: '{PAYSTACK_PUBLIC}',
+            email: '{email}',
+            amount: {amount_kobo},
+            currency: 'NGN',
+            ref: '{ref}',
+            callback: function(response){{
+                window.parent.postMessage({{type:'PAYSTACK_SUCCESS', reference: response.reference}}, '*');
+            }},
+            onClose: function(){{
+                alert('Payment window closed. Click pay again to continue.');
+            }}
+        }});
+        handler.openIframe();
+    }}
+    </script>
+    """
+    components.html(btn_code, height=80)
+    return ref
